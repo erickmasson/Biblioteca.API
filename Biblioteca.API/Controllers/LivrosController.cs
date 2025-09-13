@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Biblioteca.API.Dtos;
+using System.IO;
 
 namespace Biblioteca.API.Controllers
 {
@@ -106,6 +107,33 @@ namespace Biblioteca.API.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        [HttpDelete("{id}/download")]
+        public async Task<IActionResult> DownloadPdf(int id)
+        {
+            var livro = await _context.Livros.FindAsync(id);
+
+            if(livro == null)
+            {
+                return NotFound("O registro do livro não foi encontrado.");
+            }
+
+            if(string.IsNullOrEmpty(livro.CaminhoPdf) || !System.IO.File.Exists(livro.CaminhoPdf))
+            {
+                return NotFound("O arquivo PDF não foi encontrado no servidor.");
+            }
+
+            var memoryStream = new MemoryStream();
+            using (var stream = new FileStream(livro.CaminhoPdf, FileMode.Open))
+            {
+                await stream.CopyToAsync(memoryStream);
+            }
+
+            memoryStream.Position = 0;
+
+            var nomeArquivo = Path.GetFileName(livro.CaminhoPdf);
+            return File(memoryStream, "application/pdf", nomeArquivo);
         }
     }
 }
