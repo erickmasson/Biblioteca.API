@@ -27,7 +27,7 @@ namespace Biblioteca.API.Controllers
         {
             var livro = await _context.Livros.FindAsync(id);
 
-            if(livro == null)
+            if (livro == null)
             {
                 return NotFound();
             }
@@ -37,7 +37,7 @@ namespace Biblioteca.API.Controllers
 
         [HttpPost]
         public async Task<IActionResult> Postlivro([FromForm] CreateLivroDto livroDto) {
-            if(livroDto == null || livroDto.ArquivoPdf.Length == 0)
+            if (livroDto == null || livroDto.ArquivoPdf.Length == 0)
             {
                 return BadRequest("O arquivo pdf é obrigatório.");
             }
@@ -49,10 +49,10 @@ namespace Biblioteca.API.Controllers
                 Directory.CreateDirectory(uploadsPath);
             }
 
-            var nomeArquivoUnico = Guid.NewGuid().ToString() + Path.GetExtension(livroDto.ArquivoPdf.FileName); 
+            var nomeArquivoUnico = Guid.NewGuid().ToString() + Path.GetExtension(livroDto.ArquivoPdf.FileName);
             var caminhoArquivo = Path.Combine(uploadsPath, nomeArquivoUnico);
 
-            using(var stream = new FileStream(caminhoArquivo, FileMode.Create))
+            using (var stream = new FileStream(caminhoArquivo, FileMode.Create))
             {
                 await livroDto.ArquivoPdf.CopyToAsync(stream);
             }
@@ -71,6 +71,41 @@ namespace Biblioteca.API.Controllers
             await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(livro), new { id = livro.Id }, livro);
+        }
+
+        [HttpPut("{Id}")]
+        public async Task<IActionResult> UpdateLivro(int id, UpdateLivroDto livroDto)
+        {
+            var livro = await _context.Livros.FindAsync(id);
+
+            if(livro == null)
+            {
+                return NotFound();
+            }
+
+            livro.Titulo = livroDto.Titulo;
+            livro.Autor = livroDto.Autor;
+            livro.Genero = livroDto.Genero;
+            livro.AnoPublicacao = livroDto.AnoPublicacao;
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        [HttpDelete("{Id}")]
+        public async Task<IActionResult> DeleteLivro(int id)
+        {
+            var livro = await _context.Livros.FindAsync(id);
+
+            if (livro == null)
+            {
+                return NotFound();
+            }
+            //TODO: Adicionar lógica para deletar o arquivo PDF físico do servidor
+            _context.Livros.Remove(livro);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
     }
 }
