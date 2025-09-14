@@ -16,9 +16,9 @@ namespace Biblioteca.API.Models
         public string Email { get; set; }
 
         [Required(ErrorMessage = "A senha é obrigatória")]
-        public int SenhaHash { get; set; }
+        public string SenhaHash { get; set; }
 
         [Required]
-        public int Role { get; set; } // "Admin" ou "Membero"
+        public string Role { get; set; } // "Admin" ou "Membero"
     }
 }
