@@ -1,7 +1,8 @@
 ﻿using Biblioteca.API.Data;
+using Biblioteca.API.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Biblioteca.API.Dtos;
 using System.IO;
 
 namespace Biblioteca.API.Controllers
@@ -37,6 +38,9 @@ namespace Biblioteca.API.Controllers
         }
 
         [HttpPost]
+        [Authorize]
+        [RequestSizeLimit(100 * 1024 * 1024)]
+        [RequestFormLimits(MultipartBodyLengthLimit = 100 * 1024 * 1024)]
         public async Task<IActionResult> Postlivro([FromForm] CreateLivroDto livroDto) {
             if (livroDto == null || livroDto.ArquivoPdf.Length == 0)
             {
@@ -75,6 +79,7 @@ namespace Biblioteca.API.Controllers
         }
 
         [HttpPut("{Id}")]
+        [Authorize]
         public async Task<IActionResult> UpdateLivro(int id, UpdateLivroDto livroDto)
         {
             var livro = await _context.Livros.FindAsync(id);
@@ -94,6 +99,7 @@ namespace Biblioteca.API.Controllers
         }
 
         [HttpDelete("{Id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteLivro(int id)
         {
             var livro = await _context.Livros.FindAsync(id);
@@ -109,7 +115,7 @@ namespace Biblioteca.API.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}/download")]
+        [HttpGet("{id}/download")]
         public async Task<IActionResult> DownloadPdf(int id)
         {
             var livro = await _context.Livros.FindAsync(id);
