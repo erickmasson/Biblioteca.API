@@ -13,6 +13,7 @@ namespace Biblioteca.API.Services
             _context = context;
         }
 
+        #region CreateLivroAsync
         public async Task<Livro> CreateLivroAsync(CreateLivroDto livroDto)
         {
             if (livroDto == null || livroDto.ArquivoPdf.Length == 0)
@@ -50,7 +51,8 @@ namespace Biblioteca.API.Services
 
             return livro;
         }
-
+        #endregion
+        #region DeleteLivroAsync
         public async Task<bool> DeleteLivroAsync(int id)
         {
             var livro = await _context.Livros.FindAsync(id);
@@ -68,17 +70,22 @@ namespace Biblioteca.API.Services
             await _context.SaveChangesAsync();
             return true;
         }
-
+        #endregion
+        #region GetLivroPorIdAsync e GetTodosLivrosAsync
         public async Task<Livro?> GetLivroPorIdAsync(int id)
         {
             return await _context.Livros.FindAsync(id);
         }
 
-        public async Task<IEnumerable<Livro>> GetTodosLivrosAsync()
+        public async Task<PagedResult<Livro>> GetTodosLivrosAsync(int pageNumber, int pageSize)
         {
-            return await _context.Livros.ToListAsync();
-        }
+            var totalCount = await _context.Livros.CountAsync();
+            var items = await _context.Livros.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
 
+            return new PagedResult<Livro>(items, pageNumber, pageSize, totalCount);
+        }
+        #endregion
+        #region GetPdfStreamAsync
         public async Task<(Stream stream, string contentType, string fileName)?> GetPdfStreamAsync(int id)
         {
             var livro = await _context.Livros.FindAsync(id);
@@ -98,11 +105,12 @@ namespace Biblioteca.API.Services
             var nomeArquivo = Path.GetFileName(livro.CaminhoPdf);
             return (memoryStream, "application/pdf", nomeArquivo);
         }
-
+        #endregion
+        #region UpdateLivroAsync
         public async Task<bool> UpdateLivroAsync(int id, UpdateLivroDto livroDto)
         {
             var livro = await _context.Livros.FindAsync(id);
-            if(livro == null)
+            if (livro == null)
             {
                 return false;
             }
@@ -115,5 +123,6 @@ namespace Biblioteca.API.Services
             await _context.SaveChangesAsync();
             return true;
         }
+        #endregion
     }
 }

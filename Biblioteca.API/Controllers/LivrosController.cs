@@ -19,10 +19,10 @@ namespace Biblioteca.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetLivros()
+        public async Task<IActionResult> GetLivros([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            var livros = await _livroService.GetTodosLivrosAsync();
-            return Ok(livros);
+            var livrosPaginados = await _livroService.GetTodosLivrosAsync(pageNumber, pageSize);
+            return Ok(livrosPaginados);
         }
 
         [HttpGet("{Id}")]

@@ -5,7 +5,7 @@ namespace Biblioteca.API.Services
 {
     public interface ILivroService
     {
-        Task<IEnumerable<Livro>> GetTodosLivrosAsync();
+        Task<PagedResult<Livro>> GetTodosLivrosAsync(int pageNumber, int pageSize);
         Task<Livro>? GetLivroPorIdAsync(int id);
         Task<Livro> CreateLivroAsync(CreateLivroDto livroDto);
         Task<bool> UpdateLivroAsync(int id, UpdateLivroDto livroDto);
