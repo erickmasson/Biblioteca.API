@@ -4,7 +4,7 @@ namespace Biblioteca.API.Dtos
 {
     public class UsuarioDto
     {
-        public class UsuariosRegistroDto
+        public class UsuarioRegistroDto
         {
             [Required]
             public string Nome { get; set; }

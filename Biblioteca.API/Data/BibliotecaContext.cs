@@ -9,8 +9,7 @@ namespace Biblioteca.API.Data
         {
             
         }
-
-        public DbSet<Usuario> Usuarios { get; set; }
-        public DbSet<Livro> Livros { get; set; }
+        public virtual DbSet<Usuario> Usuarios { get; set; }
+        public virtual DbSet<Livro> Livros { get; set; }
     }
 }

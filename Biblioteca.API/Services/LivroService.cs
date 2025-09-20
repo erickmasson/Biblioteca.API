@@ -77,10 +77,26 @@ namespace Biblioteca.API.Services
             return await _context.Livros.FindAsync(id);
         }
 
-        public async Task<PagedResult<Livro>> GetTodosLivrosAsync(int pageNumber, int pageSize)
+        public async Task<PagedResult<Livro>> GetTodosLivrosAsync(int pageNumber, int pageSize, string? searchQuery, string? genero)
         {
-            var totalCount = await _context.Livros.CountAsync();
-            var items = await _context.Livros.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+            IQueryable<Livro> query = _context.Livros.AsQueryable();
+
+            if(!string.IsNullOrEmpty(searchQuery))
+            {
+                var lowerCaseSearchQuery = searchQuery.ToLower();
+                query = query.Where(l=>l.Titulo.ToLower().Contains(lowerCaseSearchQuery) || 
+                                       l.Autor.ToLower().Contains(lowerCaseSearchQuery) 
+                );
+            }
+
+            if (!string.IsNullOrEmpty(genero))
+            {
+                query = query.Where(l=>l.Genero.ToLower() == genero.ToLower());
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query.OrderBy(l => l.Titulo).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
 
             return new PagedResult<Livro>(items, pageNumber, pageSize, totalCount);
         }
