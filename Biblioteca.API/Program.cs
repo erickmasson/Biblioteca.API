@@ -7,9 +7,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
+using System.Reflection;
 using System.Text;
 using System.Text.Json.Serialization;
-using Serilog;
 
 Log.Logger = new LoggerConfiguration()
     .ReadFrom
@@ -60,9 +61,11 @@ try
             new string[] {}
         }
         });
+
+        // Habilita o Swagger a usar os comentários XML do nosso código
+        var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+        options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
     });
-    // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-    builder.Services.AddOpenApi();
 
     builder.Services.AddAuthentication(options =>
     {

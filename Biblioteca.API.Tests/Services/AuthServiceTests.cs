@@ -4,14 +4,9 @@ using Biblioteca.API.Models;
 using Biblioteca.API.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using static Biblioteca.API.Dtos.UsuarioDto;
@@ -20,20 +15,14 @@ namespace Biblioteca.API.Tests.Services
 {
     public class AuthServiceTests
     {
-        // Reintroduzimos nosso método auxiliar para criar um DbSet "mockado" a partir de uma lista
-        private Mock<DbSet<T>> CriarMockDbSet<T>(IQueryable<T> data) where T : class
+        // Método auxiliar para criar um DbContext em memória para cada teste
+        private BibliotecaContext CriarContextoEmMemoria(string nomeBanco)
         {
-            var mockSet = new Mock<DbSet<T>>();
-            mockSet.As<IAsyncEnumerable<T>>()
-                .Setup(m => m.GetAsyncEnumerator(It.IsAny<CancellationToken>()))
-                .Returns(new TestAsyncEnumerator<T>(data.GetEnumerator()));
-            mockSet.As<IQueryable<T>>()
-                .Setup(m => m.Provider)
-                .Returns(new TestAsyncQueryProvider<T>(data.Provider));
-            mockSet.As<IQueryable<T>>().Setup(m => m.Expression).Returns(data.Expression);
-            mockSet.As<IQueryable<T>>().Setup(m => m.ElementType).Returns(data.ElementType);
-            mockSet.As<IQueryable<T>>().Setup(m => m.GetEnumerator()).Returns(data.GetEnumerator());
-            return mockSet;
+            var options = new DbContextOptionsBuilder<BibliotecaContext>()
+                .UseInMemoryDatabase(databaseName: nomeBanco)
+                .Options;
+
+            return new BibliotecaContext(options);
         }
 
         [Fact]
@@ -41,71 +30,124 @@ namespace Biblioteca.API.Tests.Services
         {
             // --- 1. Arrange (Organizar) ---
 
-            // a. Criar os dados falsos que simulam o banco de dados
+            // a. Criar um contexto em memória único para este teste
+            var context = CriarContextoEmMemoria("TesteEmailDuplicadoDB");
+
+            // b. Adicionar um usuário ao "banco de dados" em memória para simular o e-mail existente
             var emailExistente = "teste@email.com";
-            var usuariosFalsos = new List<Usuario>
-            {
-                new Usuario { Id = 1, Nome = "Usuário Teste", Email = emailExistente, SenhaHash = "hash123", Role = "Membro" }
-            }.AsQueryable();
+            context.Usuarios.Add(new Usuario { Id = 1, Nome = "Usuário Teste", Email = emailExistente, SenhaHash = "hash123", Role = "Membro" });
+            await context.SaveChangesAsync();
 
-            // b. Mockar o DbSet<Usuario> usando nossa lista falsa.
-            // O AnyAsync vai rodar sobre esta lista.
-            var mockDbSetUsuarios = CriarMockDbSet(usuariosFalsos);
-
-            // c. Mockar o DbContext para retornar nosso DbSet falso
-            var mockContext = new Mock<BibliotecaContext>(new DbContextOptions<BibliotecaContext>());
-            mockContext.Setup(c => c.Usuarios).Returns(mockDbSetUsuarios.Object);
-
-            // d. Mockar as outras dependências
+            // c. Mockar as dependências que não são o DbContext
             var mockConfiguration = new Mock<IConfiguration>();
             var mockLogger = new Mock<ILogger<AuthService>>();
 
-            // e. Criar a instância do serviço que vamos testar
-            var authService = new AuthService(mockContext.Object, mockConfiguration.Object, mockLogger.Object);
+            // d. Criar a instância do serviço, passando o CONTEXTO REAL em memória
+            var authService = new AuthService(context, mockConfiguration.Object, mockLogger.Object);
 
-            // f. Criar o DTO de entrada com o e-mail duplicado
+            // e. Criar o DTO com o e-mail duplicado
             var usuarioDto = new UsuarioRegistroDto { Nome = "Novo Usuario", Email = emailExistente, Senha = "senhaNova" };
 
             // --- 2. Act (Agir) ---
 
-            // Executar o método
+            // Executar o método que queremos testar
             var resultado = await authService.RegistrarAsync(usuarioDto);
 
             // --- 3. Assert (Verificar) ---
 
             // Verificar se o resultado é o esperado
             resultado.Sucesso.Should().BeFalse();
-            resultado.Mensagem.Should().Be("Este e--mail já está em uso.");
+            resultado.Mensagem.Should().Be("Este e-mail já está em uso.");
+        }
+
+        [Fact]
+        public async Task RegistrarAsync_DeveRetornarSucesso_QuandoEmailNaoExiste()
+        {
+            // --- 1. Arrange (Organizar) ---
+            // a. Criar um contexto em memória limpo e único para este teste
+            var context = CriarContextoEmMemoria("TesteSucessoRegistroDb");
+
+            // b. Mockar as dependências que não são o DbContext
+            var mockConfiguration = new Mock<IConfiguration>();
+            var mockLogger = new Mock<ILogger<AuthService>>();
+
+            // c. Criar a instância do serviço com o contexto em memória
+            var authService = new AuthService(context, mockConfiguration.Object, mockLogger.Object);
+
+            // d. Criar o DTO com dados de um novo usuário
+            var usuarioDto = new UsuarioRegistroDto { Nome = "Novo Usuario", Email = "novo@email.com", Senha = "senha123" };
+
+            // --- 2. Act (Agir) ---
+            var resultado = await authService.RegistrarAsync(usuarioDto);
+
+            // --- 3. Assert (Verificar) ---
+            resultado.Sucesso.Should().BeTrue();
+            resultado.Mensagem.Should().Be("Usuário registrado com sucesso!");
+        }
+
+        [Fact]
+        public async Task LoginAsync_DeveRetornarFalha_QuandoSenhaIncorreta()
+        {
+            // --- 1. Arrange (Organizar) ---
+            var context = CriarContextoEmMemoria("TesteLoginSenhaIncorretaDB");
+
+            var email = "usuario.teste@email.com";
+            var senhaCorreta = "senhaForte123";
+            var senhaHash = BCrypt.Net.BCrypt.HashPassword(senhaCorreta);
+            context.Usuarios.Add(new Usuario { Id = 1, Nome = "Usuario Teste", Email = email, SenhaHash = senhaHash, Role = "Membro" });
+            await context.SaveChangesAsync();
+
+            var mockConfiguration = new Mock<IConfiguration>();
+            var mockLogger = new Mock<ILogger<AuthService>>();
+
+            var authService = new AuthService(context, mockConfiguration.Object, mockLogger.Object);
+
+            var loginDto = new UsuarioLoginDto { Email = email, Senha = "senhaErrada" };
+
+            // --- 2. Act (Agir) ---
+            var resultado = await authService.LoginAsync(loginDto);
+
+            // --- 3. Assert (Verificar) ---
+            resultado.Sucesso.Should().BeFalse();
+            resultado.TokenOuMensagem.Should().Be("E-mail ou senha inválidos.");
+        }
+
+        [Fact]
+        public async Task LoginAsync_DeveRetornarSucessoEToken_QuandoCredenciaisCorretas()
+        {
+            // --- 1. Arrange (Organizar) ---
+
+            // a. Criar um contexto em memória
+            var context = CriarContextoEmMemoria("TesteLoginSucessoDB");
+
+            // b. Criar e salvar o usuário de teste
+            var email = "usuario.teste@email.com";
+            var senhaCorreta = "senhaForte123";
+            var senhaHash = BCrypt.Net.BCrypt.HashPassword(senhaCorreta);
+            context.Usuarios.Add(new Usuario { Id = 1, Email = email, SenhaHash = senhaHash, Role = "Membro", Nome = "Usuario Teste" });
+            await context.SaveChangesAsync();
+
+            // c. Mockar a IConfiguration para fornecer as configurações do JWT
+            var mockConfiguration = new Mock<IConfiguration>();
+            mockConfiguration.Setup(c => c["Jwt:Key"]).Returns("Este-eh-um-segredo-muito-longo-e-seguro-que-voce-deve-mudar");
+            mockConfiguration.Setup(c => c["Jwt:Issuer"]).Returns("https://localhost:7123");
+            mockConfiguration.Setup(c => c["Jwt:Audience"]).Returns("https://localhost:7123");
+
+            var mockLogger = new Mock<ILogger<AuthService>>();
+
+            // d. Criar a instância do serviço com o contexto real e os mocks
+            var authService = new AuthService(context, mockConfiguration.Object, mockLogger.Object);
+
+            // e. Criar o DTO de login com as CREDENCIAIS CORRETAS
+            var loginDto = new UsuarioLoginDto { Email = email, Senha = senhaCorreta };
+
+            // --- 2. Act (Agir) ---
+            var resultado = await authService.LoginAsync(loginDto);
+
+            // --- 3. Assert (Verificar) ---
+            resultado.Sucesso.Should().BeTrue();
+            resultado.TokenOuMensagem.Should().NotBeNullOrEmpty(); // Garante que um token foi gerado
+            resultado.TokenOuMensagem.Should().StartWith("eyJ"); // Tokens JWT sempre começam com "eyJ"
         }
     }
 }
-
-#region Helpers para Mock de EF Core Async (Versão Corrigida)
-public class TestAsyncQueryProvider<TEntity> : IAsyncQueryProvider
-{
-    private readonly IQueryProvider _inner;
-    public TestAsyncQueryProvider(IQueryProvider inner) { _inner = inner; }
-    public IQueryable CreateQuery(Expression expression) => new TestAsyncEnumerable<TEntity>(expression);
-    public IQueryable<TElement> CreateQuery<TElement>(Expression expression) => new TestAsyncEnumerable<TElement>(expression);
-    public object Execute(Expression expression) => _inner.Execute(expression);
-    public TResult Execute<TResult>(Expression expression) => _inner.Execute<TResult>(expression);
-    public TResult ExecuteAsync<TResult>(Expression expression, CancellationToken cancellationToken) => Execute<TResult>(expression);
-}
-
-public class TestAsyncEnumerable<T> : EnumerableQuery<T>, IAsyncEnumerable<T>, IQueryable<T>
-{
-    public TestAsyncEnumerable(IEnumerable<T> enumerable) : base(enumerable) { }
-    public TestAsyncEnumerable(Expression expression) : base(expression) { }
-    public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default) => new TestAsyncEnumerator<T>(this.AsEnumerable().GetEnumerator());
-    IQueryProvider IQueryable.Provider => new TestAsyncQueryProvider<T>(this);
-}
-
-public class TestAsyncEnumerator<T> : IAsyncEnumerator<T>
-{
-    private readonly IEnumerator<T> _inner;
-    public TestAsyncEnumerator(IEnumerator<T> inner) { _inner = inner; }
-    public ValueTask DisposeAsync() { _inner.Dispose(); return new ValueTask(); }
-    public T Current => _inner.Current;
-    public ValueTask<bool> MoveNextAsync() => new ValueTask<bool>(_inner.MoveNext());
-}
-#endregion
